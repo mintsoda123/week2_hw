@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hooke's Law — ML Predictor with Min-Max Normalization</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+          colors: {
+            navy:  { 950:'#020617', 900:'#0f172a', 800:'#1e293b', 700:'#334155', 600:'#475569' },
+            brand: { 400:'#818cf8', 500:'#6366f1', 600:'#4f46e5' },
+          },
+          animation: {
+            'pulse-slow':    'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
+            'bounce-gentle': 'bounceGentle 2s ease-in-out infinite',
+            'glow':          'glow 2s ease-in-out infinite alternate',
+            'spring':        'springAnim 1.5s ease-in-out infinite',
+          },
+          keyframes: {
+            bounceGentle: { '0%,100%': { transform:'translateY(0)' }, '50%': { transform:'translateY(-8px)' } },
+            glow:         { from: { boxShadow:'0 0 10px #6366f166' }, to: { boxShadow:'0 0 30px #6366f199, 0 0 60px #6366f144' } },
+            springAnim:   { '0%,100%': { transform:'scaleY(1)' }, '50%': { transform:'scaleY(1.15)' } },
+          },
+          backdropBlur: { xs: '2px' },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #020617; color: #f1f5f9; }
+
+    /* Glassmorphism card */
+    .glass {
+      background: rgba(30, 41, 59, 0.65);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(100, 116, 139, 0.25);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .glass-hover:hover {
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: 0 8px 32px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+      transform: translateY(-2px);
+      transition: all 0.25s ease;
+    }
+
+    /* Gradient text */
+    .grad-text-blue  { background: linear-gradient(135deg, #6366f1, #3b82f6, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .grad-text-green { background: linear-gradient(135deg, #34d399, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .grad-text-orange{ background: linear-gradient(135deg, #f97316, #fb923c, #fbbf24); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+    /* Hero gradient background */
+    .hero-bg {
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,0.18) 0%, transparent 60%),
+                  radial-gradient(ellipse 50% 40% at 85% 30%, rgba(59,130,246,0.12) 0%, transparent 50%),
+                  #020617;
+    }
+
+    /* Animated spring SVG */
+    .spring-coil { animation: springAnim 2s ease-in-out infinite; transform-origin: top center; }
+
+    /* Progress bar */
+    .progress-bar { transition: width 0.4s ease; }
+
+    /* Code block */
+    .code-block {
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    /* Metric card */
+    .metric-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+
+    /* Image lightbox overlay */
+    .lightbox { display:none; position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:1000;
+                align-items:center; justify-content:center; cursor:zoom-out; }
+    .lightbox.open { display:flex; }
+    .lightbox img { max-width:92vw; max-height:90vh; border-radius:12px;
+                    box-shadow:0 25px 80px rgba(0,0,0,0.7); }
+
+    /* Notification toast */
+    .toast { position:fixed; bottom:24px; right:24px; z-index:999;
+             padding:12px 20px; border-radius:10px; font-size:0.875rem;
+             transform:translateX(200%); transition:transform 0.3s ease; }
+    .toast.show { transform:translateX(0); }
+
+    /* Section divider */
+    .divider { height:1px; background:linear-gradient(90deg, transparent, #334155 30%, #6366f133 50%, #334155 70%, transparent); margin:0; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-track { background:#0f172a; }
+    ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+    ::-webkit-scrollbar-thumb:hover { background:#475569; }
+
+    /* Table */
+    .data-table { border-collapse:collapse; width:100%; }
+    .data-table th { background:#0f172a; color:#94a3b8; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; padding:8px 12px; }
+    .data-table td { padding:7px 12px; border-bottom:1px solid #1e293b; font-family:'JetBrains Mono',monospace; font-size:0.82rem; }
+    .data-table tr:hover td { background:#1e293b44; }
+
+    /* Disabled state */
+    .btn-disabled { opacity:0.45; pointer-events:none; }
+
+    /* Glow ring on active input */
+    input:focus { outline:none; box-shadow:0 0 0 2px #6366f166; }
+  </style>
+</head>
+
+<body class="min-h-screen">
+
+<!-- ══════════════════════════════════════════════════════════════
+     HERO SECTION
+══════════════════════════════════════════════════════════════ -->
+<section class="hero-bg relative overflow-hidden pt-12 pb-16 px-6">
+
+  <!-- Floating particles (pure CSS) -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute w-2 h-2 bg-indigo-500 rounded-full opacity-40 animate-bounce-gentle" style="top:15%;left:8%;animation-delay:0s"></div>
+    <div class="absolute w-1.5 h-1.5 bg-blue-400 rounded-full opacity-30 animate-bounce-gentle" style="top:30%;left:92%;animation-delay:0.7s"></div>
+    <div class="absolute w-1 h-1 bg-cyan-400 rounded-full opacity-50 animate-bounce-gentle" style="top:65%;left:5%;animation-delay:1.2s"></div>
+    <div class="absolute w-2 h-2 bg-violet-400 rounded-full opacity-35 animate-bounce-gentle" style="top:80%;left:88%;animation-delay:0.4s"></div>
+  </div>
+
+  <div class="max-w-6xl mx-auto">
+    <!-- Badge -->
+    <div class="flex justify-center mb-6">
+      <span class="glass px-4 py-1.5 rounded-full text-xs font-mono text-indigo-300 tracking-wider">
+        🔬 TensorFlow  ·  Min-Max Normalization  ·  FastAPI  ·  TailwindCSS
+      </span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-center text-5xl sm:text-6xl lg:text-7xl font-black leading-none mb-6">
+      <span class="grad-text-blue">Hooke's Law</span><br/>
+      <span class="text-slate-200 text-3xl sm:text-4xl font-bold mt-2 block">ML Predictor</span>
+    </h1>
+    <p class="text-center text-slate-400 text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed">
+      Min-Max Normalization으로 스케일이 다른 물리 데이터를 0~1로 변환하고,<br/>
+      TensorFlow로 <span class="text-indigo-400 font-semibold">F = k·x</span>를 학습하여 용수철 변위를 예측합니다.
+    </p>
+
+    <!-- Hero cards row -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-3xl mx-auto">
+
+      <!-- Spring animation card -->
+      <div class="glass glass-hover rounded-2xl p-6 flex flex-col items-center text-center transition-all duration-300">
+        <svg width="60" height="90" viewBox="0 0 60 90" class="mb-3">
+          <!-- ceiling bar -->
+          <rect x="5" y="4" width="50" height="7" rx="3" fill="#6366f1"/>
+          <!-- spring coil animated -->
+          <g class="spring-coil">
+            <polyline points="30,11 10,20 50,30 10,40 50,50 10,60 50,70 30,78"
+              fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+          <!-- mass block -->
+          <rect x="16" y="78" width="28" height="10" rx="3" fill="#f97316" class="animate-bounce-gentle"/>
+          <text x="30" y="86" text-anchor="middle" font-size="6" fill="white" font-family="monospace">m</text>
+        </svg>
+        <div class="text-xs text-slate-500 font-mono">용수철 모델</div>
+        <div class="text-indigo-300 font-bold font-mono text-lg mt-1">F = k·x</div>
+      </div>
+
+      <!-- Formula card -->
+      <div class="glass glass-hover rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all duration-300">
+        <div class="text-xs text-slate-500 mb-3 tracking-wide">훅의 법칙 수식</div>
+        <div class="text-slate-200 font-mono text-sm leading-loose">
+          <div>$F = k \cdot x$</div>
+          <div>$x = \dfrac{m \cdot g}{k}$</div>
+        </div>
+        <div class="mt-3 text-xs text-slate-500">
+          <span class="text-blue-400">k</span>=10 N/m &nbsp;·&nbsp; <span class="text-blue-400">g</span>=9.8 m/s²
+        </div>
+      </div>
+
+      <!-- Normalization card -->
+      <div class="glass glass-hover rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all duration-300">
+        <div class="text-xs text-slate-500 mb-3 tracking-wide">Min-Max Normalization</div>
+        <div class="text-slate-200 font-mono text-sm">
+          $x_{norm} = \dfrac{x - x_{min}}{x_{max} - x_{min}}$
+        </div>
+        <div class="mt-3 text-xs text-slate-500 leading-relaxed">
+          질량(kg)과 변위(m)의<br/>스케일 차이를 0~1로 통일
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     NORMALIZATION EXPLAINER
+══════════════════════════════════════════════════════════════ -->
+<section class="py-14 px-6 bg-navy-950">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-8">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm">1</div>
+      <h2 class="text-2xl font-bold text-slate-100">Min-Max Normalization 이란?</h2>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+      <!-- Concept explanation -->
+      <div class="glass rounded-2xl p-7">
+        <div class="text-slate-400 text-sm leading-relaxed mb-5">
+          <code class="text-green-400 font-mono">03_data_preprocessing.py</code>에서 연봉(3천만~1억)과 나이(20~60)처럼<br/>
+          <strong class="text-slate-200">서로 다른 스케일의 데이터</strong>를 동일 범위로 변환하는 기법입니다.
+        </div>
+        <div class="code-block text-slate-300 mb-5">
+          <span class="text-slate-500"># 03_data_preprocessing.py 동일 공식</span><br/>
+          <span class="text-indigo-400">normalized</span> = (<span class="text-orange-400">x</span> - <span class="text-blue-400">x_min</span>) / (<span class="text-blue-400">x_max</span> - <span class="text-blue-400">x_min</span>)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-navy-900 rounded-xl p-4 border border-orange-500/20">
+            <div class="text-xs text-slate-500 mb-1">Before (Raw)</div>
+            <div class="text-orange-400 font-mono font-bold">질량: 0.1 ~ 10 kg</div>
+            <div class="text-orange-400 font-mono font-bold">변위: 0.01 ~ 9.8 m</div>
+            <div class="text-xs text-slate-600 mt-2">↑ 단위/스케일 혼재</div>
+          </div>
+          <div class="bg-navy-900 rounded-xl p-4 border border-blue-500/20">
+            <div class="text-xs text-slate-500 mb-1">After (Normalized)</div>
+            <div class="text-blue-400 font-mono font-bold">질량: 0.0 ~ 1.0</div>
+            <div class="text-blue-400 font-mono font-bold">변위: 0.0 ~ 1.0</div>
+            <div class="text-xs text-slate-600 mt-2">✓ 균일한 0~1 범위</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Why normalize -->
+      <div class="glass rounded-2xl p-7">
+        <h3 class="text-slate-200 font-semibold mb-4">왜 정규화가 필요한가?</h3>
+        <ul class="space-y-3">
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 text-xs mt-0.5">①</div>
+            <div>
+              <div class="text-slate-300 text-sm font-medium">기울기 소실 방지</div>
+              <div class="text-slate-500 text-xs mt-0.5">큰 스케일의 특성이 Gradient를 지배하는 현상 차단</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 text-xs mt-0.5">②</div>
+            <div>
+              <div class="text-slate-300 text-sm font-medium">학습 속도 향상</div>
+              <div class="text-slate-500 text-xs mt-0.5">Adam optimizer가 균일한 스케일에서 더 빠르게 수렴</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-xs mt-0.5">③</div>
+            <div>
+              <div class="text-slate-300 text-sm font-medium">수치 안정성</div>
+              <div class="text-slate-500 text-xs mt-0.5">부동소수점 오버플로우/언더플로우 위험 감소</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs mt-0.5">④</div>
+            <div>
+              <div class="text-slate-300 text-sm font-medium">Loss 함수 등방성</div>
+              <div class="text-slate-500 text-xs mt-0.5">Loss landscape가 타원형 → 원형에 가까워져 최적화 용이</div>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TRAINING SECTION
+══════════════════════════════════════════════════════════════ -->
+<section class="py-14 px-6 bg-gradient-to-b from-navy-950 to-navy-900">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-8">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm">2</div>
+      <h2 class="text-2xl font-bold text-slate-100">모델 학습</h2>
+      <!-- Status badge -->
+      <span id="statusBadge" class="ml-auto text-xs px-3 py-1.5 rounded-full font-mono border border-slate-700 text-slate-500">
+        미학습
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+      <!-- Config panel -->
+      <div class="lg:col-span-2 glass rounded-2xl p-6">
+        <h3 class="text-slate-300 font-semibold mb-5 flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Hyperparameters
+        </h3>
+
+        <div class="space-y-4">
+          <div>
+            <label class="text-xs text-slate-500 block mb-1.5">Epochs <span id="epochVal" class="text-indigo-400">1500</span></label>
+            <input type="range" id="epochRange" min="500" max="3000" step="100" value="1500"
+              class="w-full accent-indigo-500 cursor-pointer"
+              oninput="document.getElementById('epochVal').textContent=this.value" />
+            <div class="flex justify-between text-xs text-slate-600 mt-1"><span>500</span><span>3000</span></div>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1.5">Learning Rate <span id="lrVal" class="text-indigo-400">0.001</span></label>
+            <select id="lrSelect" class="w-full bg-navy-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:border-indigo-500"
+              onchange="document.getElementById('lrVal').textContent=this.value">
+              <option value="0.01">0.01 — fast</option>
+              <option value="0.001" selected>0.001 — balanced</option>
+              <option value="0.0005">0.0005 — precise</option>
+              <option value="0.0001">0.0001 — slow & stable</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Model architecture -->
+        <div class="mt-5 pt-5 border-t border-slate-700/50">
+          <div class="text-xs text-slate-500 mb-3">Model Architecture</div>
+          <div class="code-block text-xs leading-loose">
+            <span class="text-violet-400">Input</span>(1) → Dense(<span class="text-blue-400">32</span>, relu)<br/>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ Dense(<span class="text-blue-400">16</span>, relu)<br/>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ Dense(<span class="text-blue-400">8</span>,&nbsp; relu)<br/>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ Dense(<span class="text-orange-400">1</span>)<br/>
+            Optimizer: <span class="text-green-400">Adam</span><br/>
+            Loss: <span class="text-green-400">MSE</span>
+          </div>
+        </div>
+
+        <!-- Train button -->
+        <button id="trainBtn" onclick="startTraining()"
+          class="mt-5 w-full py-3 rounded-xl font-semibold text-sm
+                 bg-gradient-to-r from-indigo-600 to-violet-600
+                 hover:from-indigo-500 hover:to-violet-500
+                 transition-all duration-200 shadow-lg shadow-indigo-900/40
+                 flex items-center justify-center gap-2 text-white">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          학습 시작
+        </button>
+      </div>
+
+      <!-- Metrics panel -->
+      <div class="lg:col-span-3 glass rounded-2xl p-6">
+        <h3 class="text-slate-300 font-semibold mb-5">학습 결과</h3>
+
+        <!-- Progress -->
+        <div id="trainingProgress" class="hidden mb-5">
+          <div class="flex justify-between text-xs text-slate-500 mb-2">
+            <span>학습 중…</span>
+            <span id="trainingDots" class="text-indigo-400">●●●</span>
+          </div>
+          <div class="h-2 bg-navy-800 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full progress-bar w-0 animate-pulse-slow"></div>
+          </div>
+        </div>
+
+        <!-- Metrics grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5">
+          <div class="bg-navy-900/60 rounded-xl p-4 border border-slate-700/40">
+            <div class="text-xs text-slate-500 mb-1">R² Score</div>
+            <div id="metricR2" class="metric-value grad-text-green">—</div>
+          </div>
+          <div class="bg-navy-900/60 rounded-xl p-4 border border-slate-700/40">
+            <div class="text-xs text-slate-500 mb-1">Accuracy</div>
+            <div id="metricAcc" class="metric-value grad-text-blue">—</div>
+          </div>
+          <div class="bg-navy-900/60 rounded-xl p-4 border border-slate-700/40">
+            <div class="text-xs text-slate-500 mb-1">Final Loss</div>
+            <div id="metricLoss" class="metric-value text-violet-300 text-xl">—</div>
+          </div>
+          <div class="bg-navy-900/60 rounded-xl p-4 border border-slate-700/40">
+            <div class="text-xs text-slate-500 mb-1">RMSE</div>
+            <div id="metricRmse" class="metric-value text-orange-300 text-xl">—</div>
+          </div>
+          <div class="bg-navy-900/60 rounded-xl p-4 border border-slate-700/40">
+            <div class="text-xs text-slate-500 mb-1">Epochs Run</div>
+            <div id="metricEpochs" class="metric-value text-slate-300 text-xl">—</div>
+          </div>
+          <div class="bg-navy-900/60 rounded-xl p-4 border border-slate-700/40">
+            <div class="text-xs text-slate-500 mb-1">Target</div>
+            <div class="metric-value text-slate-500 text-lg">R² ≥ 0.98</div>
+          </div>
+        </div>
+
+        <!-- Result message -->
+        <div id="trainMessage" class="hidden rounded-xl px-4 py-3 text-sm font-mono"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     VISUALIZATION PLOTS
+══════════════════════════════════════════════════════════════ -->
+<section class="py-14 px-6 bg-navy-950">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-8">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white font-bold text-sm">3</div>
+      <h2 class="text-2xl font-bold text-slate-100">결과 시각화</h2>
+      <button onclick="refreshPlots()" class="ml-auto text-xs text-slate-500 hover:text-indigo-400 transition-colors flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        새로고침
+      </button>
+    </div>
+
+    <!-- Plot tabs -->
+    <div class="flex gap-2 mb-6 overflow-x-auto pb-1">
+      <button onclick="showTab('norm')" id="tab-norm"
+        class="tab-btn px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border transition-all duration-200
+               bg-indigo-600/20 border-indigo-500/40 text-indigo-300">
+        ① 정규화 비교
+      </button>
+      <button onclick="showTab('loss')" id="tab-loss"
+        class="tab-btn px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border transition-all duration-200
+               border-slate-700/40 text-slate-500 hover:text-slate-300">
+        ② Loss 곡선
+      </button>
+      <button onclick="showTab('reg')" id="tab-reg"
+        class="tab-btn px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border transition-all duration-200
+               border-slate-700/40 text-slate-500 hover:text-slate-300">
+        ③ 회귀 피팅
+      </button>
+      <button onclick="showTab('pred')" id="tab-pred"
+        class="tab-btn px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border transition-all duration-200
+               border-slate-700/40 text-slate-500 hover:text-slate-300">
+        ④ 예측 결과
+      </button>
+    </div>
+
+    <!-- Plot container -->
+    <div class="glass rounded-2xl p-4 min-h-80 relative">
+      <div id="plotLoading" class="hidden absolute inset-0 flex items-center justify-center rounded-2xl bg-navy-900/80">
+        <div class="text-center">
+          <div class="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <div class="text-slate-400 text-sm">생성 중…</div>
+        </div>
+      </div>
+
+      <div id="plot-norm" class="plot-pane">
+        <img id="img-norm" src="" alt="Normalization Comparison" class="hidden w-full rounded-xl cursor-zoom-in" onclick="openLightbox(this.src)" />
+        <div id="placeholder-norm" class="flex flex-col items-center justify-center py-20 text-slate-600">
+          <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span class="text-sm">학습 후 정규화 비교 그래프가 여기에 표시됩니다</span>
+        </div>
+      </div>
+
+      <div id="plot-loss" class="plot-pane hidden">
+        <img id="img-loss" src="" alt="Loss Curve" class="hidden w-full rounded-xl cursor-zoom-in" onclick="openLightbox(this.src)" />
+        <div id="placeholder-loss" class="flex flex-col items-center justify-center py-20 text-slate-600">
+          <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          <span class="text-sm">학습 후 Loss 곡선이 여기에 표시됩니다</span>
+        </div>
+      </div>
+
+      <div id="plot-reg" class="plot-pane hidden">
+        <img id="img-reg" src="" alt="Regression Fit" class="hidden w-full rounded-xl cursor-zoom-in" onclick="openLightbox(this.src)" />
+        <div id="placeholder-reg" class="flex flex-col items-center justify-center py-20 text-slate-600">
+          <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span class="text-sm">학습 후 회귀 피팅 그래프가 여기에 표시됩니다</span>
+        </div>
+      </div>
+
+      <div id="plot-pred" class="plot-pane hidden">
+        <img id="img-pred" src="" alt="Prediction Result" class="hidden w-full rounded-xl cursor-zoom-in" onclick="openLightbox(this.src)" />
+        <div id="placeholder-pred" class="flex flex-col items-center justify-center py-20 text-slate-600">
+          <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+          <span class="text-sm">예측 실행 후 결과 그래프가 여기에 표시됩니다</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     PREDICTION SECTION
+══════════════════════════════════════════════════════════════ -->
+<section class="py-14 px-6 bg-gradient-to-b from-navy-950 to-navy-900">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-8">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">4</div>
+      <h2 class="text-2xl font-bold text-slate-100">변위 예측</h2>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+      <!-- Input panel -->
+      <div class="glass rounded-2xl p-7">
+        <label class="text-slate-400 text-sm block mb-2">질량 입력 (kg)</label>
+        <div class="flex gap-3 mb-4">
+          <div class="relative flex-1">
+            <input type="number" id="massInput" value="2.5" min="0.01" max="200" step="0.1"
+              class="w-full bg-navy-900 border border-slate-700 rounded-xl px-4 py-3.5 text-lg font-mono text-slate-200 pr-14 focus:border-orange-500 transition-colors" />
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">kg</span>
+          </div>
+          <button id="predictBtn" onclick="runPredict()"
+            class="px-6 py-3.5 rounded-xl font-semibold text-sm
+                   bg-gradient-to-r from-orange-600 to-red-600
+                   hover:from-orange-500 hover:to-red-500
+                   transition-all duration-200 shadow-lg shadow-orange-900/40 text-white
+                   flex items-center gap-2 btn-disabled" id="predictBtn">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            예측
+          </button>
+        </div>
+
+        <!-- Quick presets -->
+        <div class="flex flex-wrap gap-2">
+          <span class="text-xs text-slate-600 flex items-center mr-1">빠른 선택:</span>
+          <button onclick="setMass(0.5)"  class="preset-btn px-3 py-1 rounded-lg text-xs bg-navy-800 border border-slate-700 text-slate-400 hover:border-orange-500/50 hover:text-orange-400 transition-all">0.5 kg</button>
+          <button onclick="setMass(1.0)"  class="preset-btn px-3 py-1 rounded-lg text-xs bg-navy-800 border border-slate-700 text-slate-400 hover:border-orange-500/50 hover:text-orange-400 transition-all">1 kg</button>
+          <button onclick="setMass(2.5)"  class="preset-btn px-3 py-1 rounded-lg text-xs bg-navy-800 border border-slate-700 text-slate-400 hover:border-orange-500/50 hover:text-orange-400 transition-all">2.5 kg</button>
+          <button onclick="setMass(5.0)"  class="preset-btn px-3 py-1 rounded-lg text-xs bg-navy-800 border border-slate-700 text-slate-400 hover:border-orange-500/50 hover:text-orange-400 transition-all">5 kg</button>
+          <button onclick="setMass(10.0)" class="preset-btn px-3 py-1 rounded-lg text-xs bg-navy-800 border border-slate-700 text-slate-400 hover:border-orange-500/50 hover:text-orange-400 transition-all">10 kg</button>
+        </div>
+
+        <!-- Ideal reference -->
+        <div class="mt-5 bg-navy-900/60 rounded-xl p-4 border border-slate-700/30">
+          <div class="text-xs text-slate-500 mb-2">이론값 (k=10 N/m)</div>
+          <div id="idealRef" class="font-mono text-sm text-slate-400">
+            x = m × 9.8 / 10 = <span class="text-green-400" id="idealVal">2.45 m</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result panel -->
+      <div class="glass rounded-2xl p-7 flex flex-col">
+        <h3 class="text-slate-400 text-sm mb-5">예측 결과</h3>
+
+        <div id="predResultEmpty" class="flex-1 flex flex-col items-center justify-center text-slate-600">
+          <svg class="w-10 h-10 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span class="text-sm">질량을 입력하고 예측 버튼을 누르세요</span>
+        </div>
+
+        <div id="predResult" class="hidden flex-1 flex flex-col gap-4">
+          <!-- Main result -->
+          <div class="text-center py-4">
+            <div class="text-sm text-slate-500 mb-1">예측 변위</div>
+            <div id="resDisp" class="text-5xl font-black grad-text-orange">—</div>
+            <div id="resDispM" class="text-slate-500 font-mono text-sm mt-1">— m</div>
+          </div>
+
+          <!-- Detail table -->
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="text-left">항목</th>
+                <th class="text-right">값</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-slate-400">입력 질량</td>
+                <td class="text-right text-slate-300"><span id="rMass">—</span> kg</td>
+              </tr>
+              <tr>
+                <td class="text-slate-400">힘 (F=mg)</td>
+                <td class="text-right text-slate-300"><span id="rForce">—</span> N</td>
+              </tr>
+              <tr>
+                <td class="text-slate-400">예측 변위</td>
+                <td class="text-right text-blue-300"><span id="rPredM">—</span> m</td>
+              </tr>
+              <tr>
+                <td class="text-slate-400">이론값</td>
+                <td class="text-right text-green-300"><span id="rIdeal">—</span> m</td>
+              </tr>
+              <tr>
+                <td class="text-slate-400">오차</td>
+                <td class="text-right text-orange-300"><span id="rError">—</span> m</td>
+              </tr>
+              <tr>
+                <td class="text-slate-400 font-semibold">정확도</td>
+                <td class="text-right font-bold"><span id="rAcc" class="text-green-400">—</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     PNG OUTPUT GALLERY
+══════════════════════════════════════════════════════════════ -->
+<section class="py-14 px-6 bg-navy-950">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-white font-bold text-sm">5</div>
+      <h2 class="text-2xl font-bold text-slate-100">PNG 출력 갤러리</h2>
+    </div>
+    <p class="text-slate-500 text-sm mb-8 ml-11">
+      모든 그래프는 <code class="text-indigo-400 font-mono">week2/Data_Pre/output/</code> 에 자동 저장됩니다.
+    </p>
+
+    <div id="galleryGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+      <div class="glass glass-hover rounded-2xl overflow-hidden transition-all duration-300">
+        <div class="bg-gradient-to-r from-orange-900/30 to-yellow-900/20 px-5 py-3 flex items-center gap-2">
+          <span class="text-xs font-mono text-orange-400">01_normalization_comparison.png</span>
+        </div>
+        <div class="p-4">
+          <img id="gallery-norm" src="" class="w-full rounded-xl hidden cursor-zoom-in" onclick="openLightbox(this.src)" alt="Normalization" />
+          <div id="gallery-placeholder-norm" class="h-36 flex items-center justify-center text-slate-700 text-sm">학습 후 생성됨</div>
+        </div>
+      </div>
+
+      <div class="glass glass-hover rounded-2xl overflow-hidden transition-all duration-300">
+        <div class="bg-gradient-to-r from-indigo-900/30 to-violet-900/20 px-5 py-3 flex items-center gap-2">
+          <span class="text-xs font-mono text-indigo-400">02_loss_curve.png</span>
+        </div>
+        <div class="p-4">
+          <img id="gallery-loss" src="" class="w-full rounded-xl hidden cursor-zoom-in" onclick="openLightbox(this.src)" alt="Loss" />
+          <div id="gallery-placeholder-loss" class="h-36 flex items-center justify-center text-slate-700 text-sm">학습 후 생성됨</div>
+        </div>
+      </div>
+
+      <div class="glass glass-hover rounded-2xl overflow-hidden transition-all duration-300">
+        <div class="bg-gradient-to-r from-blue-900/30 to-cyan-900/20 px-5 py-3 flex items-center gap-2">
+          <span class="text-xs font-mono text-blue-400">03_regression_fit.png</span>
+        </div>
+        <div class="p-4">
+          <img id="gallery-reg" src="" class="w-full rounded-xl hidden cursor-zoom-in" onclick="openLightbox(this.src)" alt="Regression" />
+          <div id="gallery-placeholder-reg" class="h-36 flex items-center justify-center text-slate-700 text-sm">학습 후 생성됨</div>
+        </div>
+      </div>
+
+      <div class="glass glass-hover rounded-2xl overflow-hidden transition-all duration-300">
+        <div class="bg-gradient-to-r from-orange-900/30 to-red-900/20 px-5 py-3 flex items-center gap-2">
+          <span class="text-xs font-mono text-orange-400">04_prediction_result.png</span>
+        </div>
+        <div class="p-4">
+          <img id="gallery-pred" src="" class="w-full rounded-xl hidden cursor-zoom-in" onclick="openLightbox(this.src)" alt="Prediction" />
+          <div id="gallery-placeholder-pred" class="h-36 flex items-center justify-center text-slate-700 text-sm">예측 후 생성됨</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     FOOTER
+══════════════════════════════════════════════════════════════ -->
+<footer class="py-8 px-6 border-t border-slate-800 bg-navy-950">
+  <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-600">
+    <div>Hooke's Law ML Predictor &nbsp;·&nbsp; week2/Data_Pre</div>
+    <div class="font-mono flex gap-4">
+      <span class="text-indigo-500">FastAPI</span>
+      <span class="text-blue-500">TensorFlow 2.x</span>
+      <span class="text-cyan-500">TailwindCSS</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ── Lightbox ── -->
+<div id="lightbox" class="lightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="Full view" />
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast" class="toast glass"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════════ -->
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let isTrained = false;
+  let activeTab = 'norm';
+
+  // ── Utilities ──────────────────────────────────────────────────────────────
+  function showToast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast glass text-sm font-mono ${type === 'success' ? 'border border-green-500/40 text-green-300' : type === 'error' ? 'border border-red-500/40 text-red-300' : 'border border-indigo-500/40 text-indigo-300'}`;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  function openLightbox(src) {
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightbox').classList.add('open');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  // ── Tab switching ───────────────────────────────────────────────────────────
+  function showTab(name) {
+    activeTab = name;
+    ['norm','loss','reg','pred'].forEach(n => {
+      document.getElementById(`plot-${n}`).classList.toggle('hidden', n !== name);
+      const btn = document.getElementById(`tab-${n}`);
+      if (n === name) {
+        btn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border transition-all duration-200 bg-indigo-600/20 border-indigo-500/40 text-indigo-300';
+      } else {
+        btn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border transition-all duration-200 border-slate-700/40 text-slate-500 hover:text-slate-300';
+      }
+    });
+  }
+
+  // ── Ideal reference updater ─────────────────────────────────────────────────
+  document.getElementById('massInput').addEventListener('input', function() {
+    const m = parseFloat(this.value) || 0;
+    const ideal = (m * 9.8 / 10).toFixed(4);
+    document.getElementById('idealVal').textContent = ideal + ' m';
+  });
+
+  function setMass(v) {
+    document.getElementById('massInput').value = v;
+    document.getElementById('idealVal').textContent = (v * 9.8 / 10).toFixed(4) + ' m';
+  }
+
+  // ── Load image helper ───────────────────────────────────────────────────────
+  function loadImg(imgId, placeholderId, url) {
+    const img = document.getElementById(imgId);
+    const ph  = document.getElementById(placeholderId);
+    const ts  = Date.now();
+    img.src   = url + '?t=' + ts;
+    img.onload  = () => { img.classList.remove('hidden'); ph && ph.classList.add('hidden'); };
+    img.onerror = () => { img.classList.add('hidden'); ph && ph.classList.remove('hidden'); };
+  }
+
+  function refreshPlots() {
+    loadImg('img-norm',    'placeholder-norm',    '/output/01_normalization_comparison.png');
+    loadImg('img-loss',    'placeholder-loss',    '/output/02_loss_curve.png');
+    loadImg('img-reg',     'placeholder-reg',     '/output/03_regression_fit.png');
+    loadImg('img-pred',    'placeholder-pred',    '/output/04_prediction_result.png');
+    loadImg('gallery-norm', 'gallery-placeholder-norm', '/output/01_normalization_comparison.png');
+    loadImg('gallery-loss', 'gallery-placeholder-loss', '/output/02_loss_curve.png');
+    loadImg('gallery-reg',  'gallery-placeholder-reg',  '/output/03_regression_fit.png');
+    loadImg('gallery-pred', 'gallery-placeholder-pred', '/output/04_prediction_result.png');
+  }
+
+  // ── Training ────────────────────────────────────────────────────────────────
+  async function startTraining() {
+    const btn    = document.getElementById('trainBtn');
+    const epochs = parseInt(document.getElementById('epochRange').value);
+    const lr     = parseFloat(document.getElementById('lrSelect').value);
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> 학습 중…';
+
+    const progress  = document.getElementById('trainingProgress');
+    const bar       = document.getElementById('progressBar');
+    const msgBox    = document.getElementById('trainMessage');
+    const badge     = document.getElementById('statusBadge');
+
+    progress.classList.remove('hidden');
+    msgBox.classList.add('hidden');
+
+    // Animate progress bar while waiting
+    let pct = 0;
+    const timer = setInterval(() => {
+      pct = Math.min(pct + (Math.random() * 3), 88);
+      bar.style.width = pct + '%';
+    }, 400);
+
+    // Animate dots
+    const dots = document.getElementById('trainingDots');
+    let di = 0;
+    const dotPatterns = ['●○○','●●○','●●●','○●●','○○●'];
+    const dotTimer = setInterval(() => { dots.textContent = dotPatterns[di++ % dotPatterns.length]; }, 350);
+
+    try {
+      const res = await fetch('/api/train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ epochs, learning_rate: lr }),
+      });
+
+      clearInterval(timer); clearInterval(dotTimer);
+      bar.style.width = '100%';
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Training failed');
+      }
+
+      const data = await res.json();
+      const m    = data.metrics;
+
+      // Update metrics
+      document.getElementById('metricR2').textContent    = m.r2_score.toFixed(4);
+      document.getElementById('metricAcc').textContent   = m.accuracy_pct.toFixed(1) + '%';
+      document.getElementById('metricLoss').textContent  = m.final_loss.toExponential(2);
+      document.getElementById('metricRmse').textContent  = (m.rmse * 100).toFixed(4) + ' cm';
+      document.getElementById('metricEpochs').textContent = m.epochs_trained;
+
+      const ok = m.r2_score >= 0.98;
+      msgBox.textContent  = data.message;
+      msgBox.className    = `rounded-xl px-4 py-3 text-sm font-mono ${ok ? 'bg-green-900/30 border border-green-500/30 text-green-300' : 'bg-orange-900/30 border border-orange-500/30 text-orange-300'}`;
+      msgBox.classList.remove('hidden');
+
+      badge.textContent  = ok ? '✓ 학습완료' : '학습완료 (R²<0.98)';
+      badge.className    = `ml-auto text-xs px-3 py-1.5 rounded-full font-mono border ${ok ? 'border-green-500/40 text-green-400 bg-green-900/20' : 'border-orange-500/40 text-orange-400 bg-orange-900/20'}`;
+
+      isTrained = true;
+      document.getElementById('predictBtn').classList.remove('btn-disabled');
+      document.getElementById('predictBtn').removeAttribute('disabled');
+
+      showToast(ok ? '✓ 학습 완료 (R² ≥ 0.98)' : '학습 완료 (낮은 R²)', ok ? 'success' : 'info');
+
+      setTimeout(refreshPlots, 300);
+
+    } catch (e) {
+      clearInterval(timer); clearInterval(dotTimer);
+      showToast('오류: ' + e.message, 'error');
+    } finally {
+      setTimeout(() => {
+        progress.classList.add('hidden');
+        bar.style.width = '0%';
+      }, 1000);
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> 재학습';
+    }
+  }
+
+  // ── Prediction ──────────────────────────────────────────────────────────────
+  async function runPredict() {
+    if (!isTrained) { showToast('먼저 모델을 학습시켜주세요', 'error'); return; }
+
+    const mass = parseFloat(document.getElementById('massInput').value);
+    if (isNaN(mass) || mass <= 0) { showToast('유효한 질량을 입력하세요', 'error'); return; }
+
+    const btn = document.getElementById('predictBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+
+    try {
+      const res = await fetch('/api/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mass_kg: mass }),
+      });
+
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
+      const d = await res.json();
+
+      document.getElementById('predResultEmpty').classList.add('hidden');
+      document.getElementById('predResult').classList.remove('hidden');
+
+      document.getElementById('resDisp').textContent   = (d.displacement_cm).toFixed(2) + ' cm';
+      document.getElementById('resDispM').textContent  = d.displacement_m.toFixed(6) + ' m';
+      document.getElementById('rMass').textContent     = d.mass_kg;
+      document.getElementById('rForce').textContent    = d.force_N.toFixed(2);
+      document.getElementById('rPredM').textContent    = d.displacement_m.toFixed(6);
+      document.getElementById('rIdeal').textContent    = d.ideal_m.toFixed(6);
+      document.getElementById('rError').textContent    = d.error_m.toFixed(6);
+      document.getElementById('rAcc').textContent      = d.accuracy_pct.toFixed(2) + ' %';
+
+      showToast(`예측 완료: ${d.displacement_cm.toFixed(2)} cm (정확도 ${d.accuracy_pct.toFixed(1)}%)`, 'success');
+
+      setTimeout(() => {
+        loadImg('img-pred',    'placeholder-pred',    '/output/04_prediction_result.png');
+        loadImg('gallery-pred','gallery-placeholder-pred','/output/04_prediction_result.png');
+        showTab('pred');
+      }, 300);
+
+    } catch (e) {
+      showToast('오류: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg> 예측';
+    }
+  }
+
+  // ── On load: check if model already trained ────────────────────────────────
+  (async () => {
+    try {
+      const res  = await fetch('/api/status');
+      const data = await res.json();
+      if (data.is_trained) {
+        isTrained = true;
+        const m = data.metrics;
+        document.getElementById('metricR2').textContent    = m.r2_score?.toFixed(4) ?? '—';
+        document.getElementById('metricAcc').textContent   = (m.accuracy_pct?.toFixed(1) ?? '—') + '%';
+        document.getElementById('metricLoss').textContent  = m.final_loss?.toExponential(2) ?? '—';
+        document.getElementById('metricRmse').textContent  = ((m.rmse ?? 0) * 100).toFixed(4) + ' cm';
+        document.getElementById('metricEpochs').textContent = m.epochs_trained ?? '—';
+        const badge = document.getElementById('statusBadge');
+        badge.textContent = '✓ 학습완료';
+        badge.className   = 'ml-auto text-xs px-3 py-1.5 rounded-full font-mono border border-green-500/40 text-green-400 bg-green-900/20';
+        document.getElementById('predictBtn').classList.remove('btn-disabled');
+        setTimeout(refreshPlots, 100);
+      }
+    } catch (e) { /* server not ready */ }
+  })();
+</script>
+
+</body>
+</html>
