@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hooke's Law — ML Linear Regression</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+    body { background: #0a0f1e; }
+
+    /* ── Gradient text ── */
+    .grad-text {
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .grad-amber {
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    /* ── Glow button ── */
+    .btn-train {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      box-shadow: 0 0 24px rgba(99,102,241,0.45);
+      transition: all 0.3s ease;
+    }
+    .btn-train:hover { box-shadow: 0 0 40px rgba(99,102,241,0.7); transform: translateY(-2px); }
+    .btn-train:active { transform: translateY(0); }
+    .btn-train:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* ── Glass card ── */
+    .glass {
+      background: rgba(30,41,59,0.7);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(71,85,105,0.4);
+    }
+
+    /* ── Plot image zoom ── */
+    .plot-img { transition: transform 0.3s ease, box-shadow 0.3s ease; cursor: zoom-in; }
+    .plot-img:hover { transform: scale(1.02); box-shadow: 0 0 32px rgba(99,102,241,0.3); }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 0.8s linear infinite; }
+
+    /* ── Pulse dot ── */
+    @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+    .pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+    /* ── Spring container ── */
+    #spring-wrap {
+      filter: drop-shadow(0 0 12px rgba(96,165,250,0.4));
+      transition: filter 0.4s;
+    }
+
+    /* ── Metric card glow ── */
+    .metric-card { transition: box-shadow 0.3s, transform 0.3s; }
+    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 0 24px rgba(99,102,241,0.25); }
+
+    /* ── Lightbox ── */
+    #lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85);
+      backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center; }
+    #lightbox.open { display:flex; }
+    #lightbox img { max-width:94vw; max-height:92vh; border-radius:12px;
+      box-shadow:0 0 60px rgba(99,102,241,0.4); }
+
+    /* ── Slider ── */
+    input[type=range] { accent-color: #6366f1; }
+
+    /* Range badge colors */
+    .badge-green { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.3); }
+    .badge-blue  { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(147,197,253,0.3); }
+    .badge-amber { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(252,211,77,0.3); }
+    .badge-purple{ background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(196,181,253,0.3); }
+    .badge-red   { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(252,165,165,0.3); }
+  </style>
+</head>
+
+<body class="min-h-screen text-slate-100">
+
+<!-- ═══════════════════════════════════════════════════ HERO ═══ -->
+<header class="relative overflow-hidden py-20 px-6">
+  <!-- Background blobs -->
+  <div class="absolute inset-0 pointer-events-none">
+    <div class="absolute top-[-80px] left-[-80px] w-[480px] h-[480px] rounded-full bg-blue-700/20 blur-[120px]"></div>
+    <div class="absolute bottom-[-60px] right-[-60px] w-[400px] h-[400px] rounded-full bg-purple-700/20 blur-[120px]"></div>
+  </div>
+
+  <div class="relative max-w-6xl mx-auto flex flex-col lg:flex-row items-center gap-12">
+
+    <!-- Left: Text -->
+    <div class="flex-1 text-center lg:text-left">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full badge-blue text-sm mb-6">
+        <span class="pulse-dot w-2 h-2 rounded-full bg-blue-400 inline-block"></span>
+        TensorFlow  ·  FastAPI  ·  Tailwind CSS
+      </div>
+
+      <h1 class="text-5xl lg:text-6xl font-black leading-tight mb-4">
+        <span class="grad-text">훅의 법칙</span><br/>
+        <span class="text-slate-200 text-4xl lg:text-5xl font-bold">선형 회귀 학습</span>
+      </h1>
+
+      <p class="text-slate-400 text-lg leading-relaxed max-w-lg mx-auto lg:mx-0 mb-8">
+        TensorFlow / Keras 로 용수철 실험 데이터를 학습하여<br/>
+        새로운 질량에 대한 늘어나는 길이를 예측합니다.
+      </p>
+
+      <!-- Formula display -->
+      <div class="glass rounded-2xl p-5 inline-block text-left">
+        <p class="text-xs text-slate-500 mb-2 uppercase tracking-widest">Hooke's Law</p>
+        <p class="mono text-2xl font-semibold text-amber-300">F = k · x</p>
+        <p class="mono text-lg text-slate-400 mt-1">L = k · m + L<sub class="text-sm">0</sub></p>
+        <div class="mt-3 flex flex-wrap gap-3 text-sm">
+          <span class="badge-amber px-2 py-0.5 rounded">k = 2.0 cm/kg</span>
+          <span class="badge-green px-2 py-0.5 rounded">L₀ = 10.0 cm</span>
+          <span class="badge-blue px-2 py-0.5 rounded">σ_noise = 0.45 cm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Spring SVG -->
+    <div class="flex-shrink-0 flex flex-col items-center gap-2">
+      <div id="spring-wrap">
+        <svg id="spring-svg" viewBox="0 0 120 380" width="140" height="380" xmlns="http://www.w3.org/2000/svg">
+          <!-- Ceiling hatching -->
+          <rect x="0" y="0" width="120" height="16" rx="2" fill="#475569"/>
+          <line x1="10" y1="0" x2="0"  y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="25" y1="0" x2="15" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="40" y1="0" x2="30" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="55" y1="0" x2="45" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="70" y1="0" x2="60" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="85" y1="0" x2="75" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="100" y1="0" x2="90" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <line x1="115" y1="0" x2="105" y2="14" stroke="#334155" stroke-width="1.5"/>
+          <!-- Hook -->
+          <line x1="60" y1="16" x2="60" y2="26" stroke="#94A3B8" stroke-width="2.5"/>
+          <!-- Spring coil -->
+          <path id="spring-path" stroke="#60A5FA" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+          <!-- Mass block -->
+          <rect id="mass-rect" x="25" y="200" width="70" height="36" rx="6"
+                fill="url(#massGrad)" filter="url(#glow)"/>
+          <text id="mass-text" x="60" y="223" text-anchor="middle"
+                fill="white" font-size="13" font-weight="700" font-family="Inter, sans-serif">0 kg</text>
+          <!-- Length annotation -->
+          <line x1="108" y1="26" x2="108" y2="200" id="len-line" stroke="#34D399" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>
+          <text id="len-label" x="114" y="120" fill="#34D399" font-size="9" font-weight="600"
+                font-family="JetBrains Mono, monospace" text-anchor="start">10.0 cm</text>
+          <!-- Defs -->
+          <defs>
+            <linearGradient id="massGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F59E0B"/>
+              <stop offset="100%" stop-color="#D97706"/>
+            </linearGradient>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+        </svg>
+      </div>
+      <p class="text-slate-500 text-xs">← 용수철 시각화</p>
+    </div>
+
+  </div>
+</header>
+
+<!-- ═════════════════════════════════════════ PHYSICS CARDS ═══ -->
+<section class="max-w-6xl mx-auto px-6 py-8">
+  <h2 class="text-xl font-bold text-slate-300 mb-5">물리적 배경</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <div class="glass rounded-xl p-5 metric-card">
+      <div class="text-3xl mb-2">🔵</div>
+      <h3 class="font-bold text-blue-300 mb-1">용수철 상수 <span class="mono text-sm">k</span></h3>
+      <p class="text-slate-400 text-sm">1 kg 당 용수철이 늘어나는 길이(cm). 본 실험에서 <span class="mono text-amber-300">k = 2.0</span> cm/kg 으로 설정.</p>
+    </div>
+
+    <div class="glass rounded-xl p-5 metric-card">
+      <div class="text-3xl mb-2">🟢</div>
+      <h3 class="font-bold text-emerald-300 mb-1">초기 길이 <span class="mono text-sm">L₀</span></h3>
+      <p class="text-slate-400 text-sm">추를 달지 않았을 때 용수철 자연 길이. <span class="mono text-amber-300">L₀ = 10.0</span> cm 로 설정.</p>
+    </div>
+
+    <div class="glass rounded-xl p-5 metric-card">
+      <div class="text-3xl mb-2">📐</div>
+      <h3 class="font-bold text-purple-300 mb-1">예측 식</h3>
+      <p class="text-slate-400 text-sm">AI가 학습해야 하는 목표 수식: <span class="mono text-amber-300">L = 2·m + 10</span><br/>측정 오차 σ = 0.45 cm 포함.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════ MODEL ARCHITECTURE ═══ -->
+<section class="max-w-6xl mx-auto px-6 py-4">
+  <div class="glass rounded-xl p-5">
+    <h2 class="text-base font-bold text-slate-300 mb-3">모델 아키텍처</h2>
+    <div class="flex flex-wrap items-center gap-3 text-sm">
+      <div class="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+        <span class="text-blue-400 font-bold mono">Input</span>
+        <span class="text-slate-500">→</span>
+        <span class="text-slate-300">mass (1)</span>
+      </div>
+      <span class="text-slate-600 text-lg">→</span>
+      <div class="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+        <span class="text-purple-400 font-bold mono">Dense</span>
+        <span class="text-slate-300">(units=1, linear)</span>
+      </div>
+      <span class="text-slate-600 text-lg">→</span>
+      <div class="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+        <span class="text-emerald-400 font-bold mono">Output</span>
+        <span class="text-slate-500">→</span>
+        <span class="text-slate-300">length (1)</span>
+      </div>
+      <div class="ml-auto flex flex-wrap gap-2">
+        <span class="badge-blue px-2 py-1 rounded text-xs mono">Adam lr=0.08</span>
+        <span class="badge-amber px-2 py-1 rounded text-xs mono">Loss: MSE</span>
+        <span class="badge-green px-2 py-1 rounded text-xs mono">Target R² ≥ 0.98</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════ TRAINING ════════ -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="glass rounded-2xl p-8">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <h2 class="text-2xl font-bold text-slate-100">모델 학습</h2>
+        <p class="text-slate-400 text-sm mt-1">R² ≥ 0.98 이 될 때까지 자동으로 에폭을 늘려 재학습합니다.</p>
+      </div>
+      <button id="btn-train" class="btn-train text-white font-bold px-8 py-3.5 rounded-xl text-base flex items-center gap-3 whitespace-nowrap" onclick="startTraining()">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        학습 시작
+      </button>
+    </div>
+
+    <!-- Status bar -->
+    <div id="status-bar" class="hidden mb-6 flex items-center gap-3 glass rounded-xl px-4 py-3">
+      <svg id="status-spinner" class="spinner w-5 h-5 text-blue-400 hidden" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+      </svg>
+      <svg id="status-check" class="w-5 h-5 text-emerald-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      <span id="status-text" class="text-slate-300 text-sm"></span>
+    </div>
+
+    <!-- Metrics grid -->
+    <div id="metrics" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4">
+
+      <div class="metric-card glass rounded-xl p-4 text-center">
+        <p class="text-xs text-slate-500 uppercase tracking-widest mb-1">R² Score</p>
+        <p id="m-r2" class="mono text-2xl font-bold text-emerald-400">—</p>
+        <p class="text-xs text-slate-500 mt-1">목표 ≥ 0.98</p>
+      </div>
+
+      <div class="metric-card glass rounded-xl p-4 text-center">
+        <p class="text-xs text-slate-500 uppercase tracking-widest mb-1">학습된 k</p>
+        <p id="m-k" class="mono text-2xl font-bold text-amber-300">—</p>
+        <p class="text-xs text-slate-500 mt-1">정답 k = 2.0000</p>
+      </div>
+
+      <div class="metric-card glass rounded-xl p-4 text-center">
+        <p class="text-xs text-slate-500 uppercase tracking-widest mb-1">학습된 b</p>
+        <p id="m-b" class="mono text-2xl font-bold text-amber-300">—</p>
+        <p class="text-xs text-slate-500 mt-1">정답 b = 10.0000</p>
+      </div>
+
+      <div class="metric-card glass rounded-xl p-4 text-center">
+        <p class="text-xs text-slate-500 uppercase tracking-widest mb-1">최종 MSE</p>
+        <p id="m-loss" class="mono text-2xl font-bold text-blue-300">—</p>
+        <p class="text-xs text-slate-500 mt-1"><span id="m-epochs">—</span> epochs</p>
+      </div>
+
+    </div>
+
+    <!-- Learned formula -->
+    <div id="formula-box" class="hidden mt-4 glass rounded-xl p-4 text-center">
+      <p class="text-xs text-slate-500 mb-1">AI가 학습한 수식</p>
+      <p id="m-formula" class="mono text-xl font-semibold text-sky-300">—</p>
+    </div>
+
+    <!-- Accuracy bars -->
+    <div id="acc-bars" class="hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>k 정확도</span><span id="k-acc-text">—</span>
+        </div>
+        <div class="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+          <div id="k-acc-bar" class="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-1000" style="width:0%"></div>
+        </div>
+      </div>
+      <div>
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>b 정확도</span><span id="b-acc-text">—</span>
+        </div>
+        <div class="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+          <div id="b-acc-bar" class="h-full rounded-full bg-gradient-to-r from-blue-400 to-purple-400 transition-all duration-1000" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ PLOTS ═════════ -->
+<section id="plots-section" class="max-w-6xl mx-auto px-6 pb-12 hidden">
+  <h2 class="text-2xl font-bold text-slate-200 mb-6">시각화 결과</h2>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <div class="glass rounded-2xl p-4">
+      <p class="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+        <span class="badge-green px-2 py-0.5 rounded text-xs">01</span> 선형 회귀 피팅
+      </p>
+      <img class="plot-img w-full rounded-xl" src="/output/spring_fitting.png" id="img-fit"
+           alt="Regression" onclick="openLight(this.src)" />
+    </div>
+
+    <div class="glass rounded-2xl p-4">
+      <p class="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+        <span class="badge-red px-2 py-0.5 rounded text-xs">02</span> 손실 함수 (Epoch별)
+      </p>
+      <img class="plot-img w-full rounded-xl" src="/output/loss_curve.png" id="img-loss"
+           alt="Loss" onclick="openLight(this.src)" />
+    </div>
+
+    <div class="glass rounded-2xl p-4">
+      <p class="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+        <span class="badge-purple px-2 py-0.5 rounded text-xs">03</span> 잔차 분석 (Residuals)
+      </p>
+      <img class="plot-img w-full rounded-xl" src="/output/residuals.png" id="img-res"
+           alt="Residuals" onclick="openLight(this.src)" />
+    </div>
+
+    <div class="glass rounded-2xl p-4">
+      <p class="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+        <span class="badge-amber px-2 py-0.5 rounded text-xs">04</span> 손실 지형 & 경사하강 경로
+      </p>
+      <img class="plot-img w-full rounded-xl" src="/output/loss_landscape.png" id="img-land"
+           alt="Landscape" onclick="openLight(this.src)" />
+    </div>
+
+  </div>
+  <p class="text-slate-600 text-xs mt-3 text-right">이미지를 클릭하면 크게 볼 수 있습니다.</p>
+</section>
+
+<!-- ══════════════════════════════════════ PREDICTOR ══════════ -->
+<section id="predict-section" class="max-w-6xl mx-auto px-6 pb-20 hidden">
+  <div class="glass rounded-2xl p-8">
+    <h2 class="text-2xl font-bold text-slate-100 mb-2">대화형 예측기</h2>
+    <p class="text-slate-400 text-sm mb-8">질량을 입력하면 AI가 용수철의 늘어난 길이를 예측합니다.</p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+
+      <!-- Left: Controls -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-300 mb-3">
+          질량 입력 <span id="mass-disp" class="mono text-amber-300 ml-2">0 kg</span>
+        </label>
+        <input type="range" id="mass-slider" min="0" max="50" step="0.5" value="0"
+               class="w-full h-2 rounded-full mb-6 cursor-pointer" oninput="onSlider(this.value)" />
+
+        <div class="flex gap-3 mb-6">
+          <input type="number" id="mass-input" value="0" min="0" max="200" step="0.5"
+                 class="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-slate-100 mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                 oninput="onManualInput(this.value)" placeholder="질량 (kg)"/>
+          <button onclick="runPredict()" id="btn-predict"
+                  class="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold px-6 py-3 rounded-xl transition-all whitespace-nowrap disabled:opacity-40"
+                  disabled>
+            예측 →
+          </button>
+        </div>
+
+        <!-- Result card -->
+        <div id="pred-result" class="hidden glass rounded-xl p-5 space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400 text-sm">AI 예측 길이</span>
+            <span id="pred-val" class="mono font-bold text-2xl text-emerald-400">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400 text-sm">이론값 (2m+10)</span>
+            <span id="theo-val" class="mono font-semibold text-sky-300">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400 text-sm">오차율</span>
+            <span id="err-val" class="mono font-semibold text-slate-300">—</span>
+          </div>
+          <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div id="acc-visual-bar" class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-all duration-700" style="width:0%"></div>
+          </div>
+          <p id="acc-visual-label" class="text-xs text-slate-500 text-right">정확도</p>
+        </div>
+      </div>
+
+      <!-- Right: Spring animation -->
+      <div class="flex flex-col items-center gap-3">
+        <div id="spring-wrap2">
+          <svg id="spring-svg2" viewBox="0 0 140 420" width="160" height="420" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="140" height="18" rx="2" fill="#475569"/>
+            <line x1="12" y1="0" x2="0"  y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="30" y1="0" x2="18" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="48" y1="0" x2="36" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="66" y1="0" x2="54" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="84" y1="0" x2="72" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="102" y1="0" x2="90" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="120" y1="0" x2="108" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="138" y1="0" x2="126" y2="16" stroke="#334155" stroke-width="1.5"/>
+            <line x1="70" y1="18" x2="70" y2="30" stroke="#94A3B8" stroke-width="3"/>
+            <path id="spring-path2" stroke="#60A5FA" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <rect id="mass-rect2" x="28" y="100" width="84" height="40" rx="8" fill="url(#massGrad2)"/>
+            <text id="mass-text2" x="70" y="125" text-anchor="middle"
+                  fill="white" font-size="14" font-weight="700" font-family="Inter, sans-serif">0 kg</text>
+            <line x1="128" y1="30" x2="128" y2="140" id="len-line2" stroke="#34D399"
+                  stroke-width="1.2" stroke-dasharray="5 3" opacity="0.7"/>
+            <text id="len-label2" x="118" y="90" fill="#34D399" font-size="10" font-weight="600"
+                  font-family="JetBrains Mono, monospace" text-anchor="end">L = 10.0 cm</text>
+            <defs>
+              <linearGradient id="massGrad2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#F59E0B"/>
+                <stop offset="100%" stop-color="#D97706"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <p class="text-slate-500 text-xs">질량 변경 시 실시간 반응</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════ FOOTER ═══════════ -->
+<footer class="border-t border-slate-800 py-10 px-6">
+  <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <p class="text-slate-500 text-sm">Hooke's Law ML Demo  ·  Week 2 Assignment</p>
+    <div class="flex flex-wrap gap-2">
+      <span class="badge-red px-3 py-1 rounded-full text-xs font-semibold">TensorFlow 2.x</span>
+      <span class="badge-green px-3 py-1 rounded-full text-xs font-semibold">FastAPI</span>
+      <span class="badge-blue px-3 py-1 rounded-full text-xs font-semibold">Tailwind CSS</span>
+      <span class="badge-amber px-3 py-1 rounded-full text-xs font-semibold">Matplotlib</span>
+      <span class="badge-purple px-3 py-1 rounded-full text-xs font-semibold">NumPy</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ════════════════════════════════════ LIGHTBOX ════════════ -->
+<div id="lightbox" onclick="closeLight()">
+  <img id="lightbox-img" src="" alt="Full plot" />
+</div>
+
+<!-- ════════════════════════════════════ SCRIPT ══════════════ -->
+<script>
+  // ── Spring drawing ──────────────────────────────────────────
+  function springPath(cx, y0, h, amp, coils) {
+    const ch = h / coils;
+    let d = `M ${cx} ${y0}`;
+    for (let i = 0; i < coils; i++) {
+      const yt = y0 + i * ch;
+      const ym = yt + ch / 2;
+      const yb = yt + ch;
+      const x1 = cx + amp, x2 = cx - amp;
+      d += ` C ${x1} ${yt + ch*0.2}, ${x1} ${yt + ch*0.45}, ${cx} ${ym}`;
+      d += ` C ${x2} ${ym + ch*0.05}, ${x2} ${yb - ch*0.2}, ${cx} ${yb}`;
+    }
+    return d;
+  }
+
+  function updateHeroSpring(massKg) {
+    const cx = 60, y0 = 26;
+    const minH = 60, maxH = 270;
+    const h = minH + Math.min(massKg, 50) / 50 * (maxH - minH);
+    const yEnd = y0 + h;
+    document.getElementById('spring-path').setAttribute('d', springPath(cx, y0, h, 16, 12));
+    document.getElementById('mass-rect').setAttribute('y', yEnd);
+    document.getElementById('mass-text').setAttribute('y', yEnd + 22);
+    document.getElementById('mass-text').textContent = `${massKg} kg`;
+    document.getElementById('len-line').setAttribute('y2', yEnd + 36);
+    document.getElementById('len-label').setAttribute('y', y0 + h / 2 + 4);
+    const L = (2.0 * massKg + 10).toFixed(1);
+    document.getElementById('len-label').textContent = `${L} cm`;
+  }
+
+  function updatePredictSpring(massKg, predictedL) {
+    const cx = 70, y0 = 30;
+    const minH = 70, maxH = 330;
+    const h = minH + Math.min(massKg, 50) / 50 * (maxH - minH);
+    const yEnd = y0 + h;
+    document.getElementById('spring-path2').setAttribute('d', springPath(cx, y0, h, 20, 14));
+    document.getElementById('mass-rect2').setAttribute('y', yEnd);
+    document.getElementById('mass-text2').setAttribute('y', yEnd + 26);
+    document.getElementById('mass-text2').textContent = `${massKg} kg`;
+    document.getElementById('len-line2').setAttribute('y2', yEnd + 40);
+    document.getElementById('len-label2').setAttribute('y', y0 + h / 2 + 4);
+    const label = predictedL ? `L = ${predictedL.toFixed(1)} cm` : `L ≈ ${(2*massKg+10).toFixed(1)} cm`;
+    document.getElementById('len-label2').textContent = label;
+  }
+
+  // Init springs at 0 kg
+  updateHeroSpring(0);
+  updatePredictSpring(0, null);
+
+  // ── Slider ──────────────────────────────────────────────────
+  let currentMass = 0;
+
+  function onSlider(val) {
+    currentMass = parseFloat(val);
+    document.getElementById('mass-input').value = val;
+    document.getElementById('mass-disp').textContent = `${val} kg`;
+    updateHeroSpring(currentMass);
+    updatePredictSpring(currentMass, null);
+    document.getElementById('pred-result').classList.add('hidden');
+  }
+
+  function onManualInput(val) {
+    const v = parseFloat(val) || 0;
+    currentMass = v;
+    const sliderVal = Math.min(v, 50);
+    document.getElementById('mass-slider').value = sliderVal;
+    document.getElementById('mass-disp').textContent = `${v} kg`;
+    updateHeroSpring(Math.min(v, 50));
+    updatePredictSpring(Math.min(v, 50), null);
+    document.getElementById('pred-result').classList.add('hidden');
+  }
+
+  // ── Training ─────────────────────────────────────────────────
+  let trained = false;
+
+  async function startTraining() {
+    const btn = document.getElementById('btn-train');
+    const status = document.getElementById('status-bar');
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spinner w-5 h-5" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> 학습 중…`;
+
+    status.classList.remove('hidden');
+    document.getElementById('status-spinner').classList.remove('hidden');
+    document.getElementById('status-check').classList.add('hidden');
+    document.getElementById('status-text').textContent = 'TensorFlow 모델 학습 중입니다. 잠시 기다려주세요…';
+
+    try {
+      const res = await fetch('/api/train', { method: 'POST' });
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error || '학습 실패');
+
+      // Status
+      document.getElementById('status-spinner').classList.add('hidden');
+      document.getElementById('status-check').classList.remove('hidden');
+      document.getElementById('status-text').textContent =
+        `✅ 학습 완료!  R² = ${data.r2_score}  |  ${data.epochs} epochs  |  ${data.attempts}회 시도`;
+
+      // Metrics
+      document.getElementById('metrics').classList.remove('hidden');
+      document.getElementById('formula-box').classList.remove('hidden');
+      document.getElementById('acc-bars').classList.remove('hidden');
+
+      animateNumber('m-r2', 0, data.r2_score, 1200, 6);
+      animateNumber('m-k',  0, data.learned_k, 900, 4);
+      animateNumber('m-b',  0, data.learned_b, 900, 4);
+      animateNumber('m-loss', 0, data.final_loss, 900, 6);
+      document.getElementById('m-epochs').textContent = data.epochs + ' epochs';
+      document.getElementById('m-formula').textContent = data.formula;
+
+      setTimeout(() => {
+        document.getElementById('k-acc-bar').style.width = data.k_acc + '%';
+        document.getElementById('b-acc-bar').style.width = data.b_acc + '%';
+        document.getElementById('k-acc-text').textContent = data.k_acc + '%';
+        document.getElementById('b-acc-text').textContent = data.b_acc + '%';
+      }, 200);
+
+      // Color R² based on value
+      const r2El = document.getElementById('m-r2');
+      if (data.r2_score >= 0.98) { r2El.className = 'mono text-2xl font-bold text-emerald-400'; }
+      else { r2El.className = 'mono text-2xl font-bold text-amber-400'; }
+
+      // Show plots & predictor
+      reloadPlots();
+      document.getElementById('plots-section').classList.remove('hidden');
+      document.getElementById('predict-section').classList.remove('hidden');
+      document.getElementById('btn-predict').disabled = false;
+      trained = true;
+
+      btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg> 재학습`;
+      btn.disabled = false;
+
+    } catch (err) {
+      document.getElementById('status-spinner').classList.add('hidden');
+      document.getElementById('status-text').textContent = `❌ 오류: ${err.message}`;
+      btn.disabled = false;
+      btn.innerHTML = '학습 시작';
+    }
+  }
+
+  // ── Predict ──────────────────────────────────────────────────
+  async function runPredict() {
+    const mass = parseFloat(document.getElementById('mass-input').value) || 0;
+    const btn = document.getElementById('btn-predict');
+    btn.disabled = true;
+    btn.textContent = '예측 중…';
+
+    try {
+      const res = await fetch('/api/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mass })
+      });
+      const data = await res.json();
+
+      document.getElementById('pred-result').classList.remove('hidden');
+      document.getElementById('pred-val').textContent = data.predicted.toFixed(4) + ' cm';
+      document.getElementById('theo-val').textContent = data.theoretical.toFixed(4) + ' cm';
+      document.getElementById('err-val').textContent = data.error_pct.toFixed(4) + '%';
+
+      const acc = Math.max(0, 100 - data.error_pct);
+      document.getElementById('acc-visual-bar').style.width = Math.min(acc, 100) + '%';
+      document.getElementById('acc-visual-label').textContent = `정확도 ${acc.toFixed(2)}%`;
+
+      updatePredictSpring(Math.min(mass, 50), data.predicted);
+      updateHeroSpring(Math.min(mass, 50));
+
+    } catch (e) {
+      alert('예측 오류: ' + e.message);
+    }
+
+    btn.textContent = '예측 →';
+    btn.disabled = false;
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function animateNumber(id, from, to, dur, decimals) {
+    const el = document.getElementById(id);
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      el.textContent = (from + (to - from) * ease).toFixed(decimals);
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function reloadPlots() {
+    const ts = '?t=' + Date.now();
+    ['img-fit','img-loss','img-res','img-land'].forEach((id, i) => {
+      const srcs = ['/output/spring_fitting.png','/output/loss_curve.png',
+                    '/output/residuals.png','/output/loss_landscape.png'];
+      document.getElementById(id).src = srcs[i] + ts;
+    });
+  }
+
+  // ── Lightbox ─────────────────────────────────────────────────
+  function openLight(src) {
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox').classList.add('open');
+  }
+  function closeLight() {
+    document.getElementById('lightbox').classList.remove('open');
+  }
+  document.addEventListener('keydown', e => { if(e.key==='Escape') closeLight(); });
+</script>
+</body>
+</html>
